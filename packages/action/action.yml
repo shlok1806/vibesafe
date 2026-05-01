@@ -1,0 +1,49 @@
+name: VibeSafe
+description: AI-powered PR security review that catches what vibe coding misses
+author: shlok1806
+
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  anthropic-api-key:
+    description: Your Anthropic API key. If omitted, uses the hosted VibeSafe API (requires vibesafe-token).
+    required: false
+  vibesafe-token:
+    description: VibeSafe hosted API token. Alternative to bringing your own Anthropic key.
+    required: false
+  github-token:
+    description: GitHub token for posting comments. Defaults to the built-in token.
+    required: false
+    default: ${{ github.token }}
+  severity-threshold:
+    description: "Report issues at this severity and above. Options: critical | warning | info"
+    required: false
+    default: warning
+  fail-on-critical:
+    description: Exit with code 1 if any critical issues are found.
+    required: false
+    default: 'false'
+  max-files:
+    description: Maximum number of files to analyze per PR.
+    required: false
+    default: '20'
+  inline-comments:
+    description: Post inline review comments on specific lines in addition to the summary comment.
+    required: false
+    default: 'false'
+
+outputs:
+  score:
+    description: Security score from 0 to 100
+  critical-count:
+    description: Number of critical issues found
+  warning-count:
+    description: Number of warning issues found
+  issues-found:
+    description: true if any issues at or above threshold were found
+
+runs:
+  using: node20
+  main: dist/index.js

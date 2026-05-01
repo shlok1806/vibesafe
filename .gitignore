@@ -1,0 +1,29 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+packages/shared/dist/
+packages/api/dist/
+packages/web/.next/
+packages/web/out/
+
+# The action dist/ is intentionally committed (required by GitHub Actions runtime)
+# packages/action/dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Turbo cache
+.turbo/
