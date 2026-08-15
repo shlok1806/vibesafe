@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test, typecheck, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck --workspaces --if-present
+
+      - name: Build
+        run: npm run build
+
+  dist-in-sync:
+    # The action is consumed straight from this repo, so GitHub runs the
+    # committed packages/action/dist bundle - not src. If dist drifts from src,
+    # every consumer silently keeps running the stale build. This is the single
+    # most common way a JavaScript Action breaks, so it is enforced, not trusted.
+    name: Committed dist matches src
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Fail if rebuilding changed the committed bundle
+        run: |
+          if ! git diff --quiet -- packages/action/dist; then
+            echo "::error::packages/action/dist is stale. Run 'npm run build' and commit the result."
+            git diff --stat -- packages/action/dist
+            exit 1
+          fi
+          echo "dist is up to date with src."
+
+  action-loads:
+    # A bundle that builds is still not a bundle that runs: a missing runtime
+    # dep or a bad ncc externals config only shows up on require().
+    name: Action bundle loads
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Require the built bundle
+        env:
+          # @actions/core reads inputs from INPUT_<NAME>, uppercased with dashes
+          # kept. Supplying them keeps the action from emitting its own
+          # ::error:: annotation, which would show as a red mark on a green job.
+          INPUT_ANTHROPIC-API-KEY: dummy-key-for-load-check
+          INPUT_GITHUB-TOKEN: dummy-token-for-load-check
+        run: |
+          # Workflow commands printed by the bundle are neutralised for the
+          # duration of this step so its log output cannot annotate the job.
+          echo "::stop-commands::loadcheck"
+          node -e "
+            try {
+              require('./packages/action/dist/index.js');
+              console.log('bundle loaded');
+            } catch (e) {
+              if (/Cannot find module|SyntaxError|Unexpected token/.test(String(e))) {
+                console.error('BUNDLE_LOAD_FAILED', e);
+                process.exit(1);
+              }
+              console.log('bundle loaded (threw on missing Actions context, which is expected)');
+            }
+          "
+          status=$?
+          echo "::loadcheck::"
+          exit $status
+
+  api-image:
+    name: API image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/api/Dockerfile
+          push: false
+          tags: vibesafe-api:ci
