@@ -96,14 +96,38 @@ jobs:
           exit $status
 
   api-image:
+    # This job is why the Dockerfile was rewritten: the old one did
+    # `COPY dist/ ./dist/` against a gitignored build output, so the image had
+    # never actually been buildable from a clean checkout.
     name: API image builds
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - name: Build the API image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: packages/api/Dockerfile
           push: false
+          load: true
           tags: vibesafe-api:ci
+
+      - name: The image must actually start
+        run: |
+          docker run -d --name api -p 3001:3001 vibesafe-api:ci
+          for i in $(seq 1 20); do
+            if docker exec api node -e "process.exit(0)" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          sleep 3
+          docker logs api
+          # A container that exited immediately means the entrypoint is wrong,
+          # which a plain `docker build` would never catch.
+          state=$(docker inspect -f '{{.State.Status}}' api)
+          echo "container state: $state"
+          if [ "$state" = "exited" ]; then
+            code=$(docker inspect -f '{{.State.ExitCode}}' api)
+            echo "::error::API container exited immediately with code $code"
+            exit 1
+          fi
