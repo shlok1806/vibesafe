@@ -99,8 +99,25 @@ jobs:
     # This job is why the Dockerfile was rewritten: the old one did
     # `COPY dist/ ./dist/` against a gitignored build output, so the image had
     # never actually been buildable from a clean checkout.
-    name: API image builds
+    name: API image builds and starts
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vibesafe
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -113,21 +130,37 @@ jobs:
           load: true
           tags: vibesafe-api:ci
 
-      - name: The image must actually start
+      - name: The image must actually start and serve
+        # Building an image is not evidence that it runs. The API needs Postgres
+        # and Redis, so both are provided above rather than weakening the check.
         run: |
-          docker run -d --name api -p 3001:3001 vibesafe-api:ci
-          for i in $(seq 1 20); do
-            if docker exec api node -e "process.exit(0)" 2>/dev/null; then break; fi
-            sleep 1
+          docker run -d --name api --network host \
+            -e NODE_ENV=production \
+            -e PORT=3001 \
+            -e DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/vibesafe \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
+            -e JWT_SECRET=ci-placeholder-jwt-secret \
+            -e ANTHROPIC_API_KEY=sk-ant-ci-placeholder \
+            -e GITHUB_CLIENT_ID=ci-placeholder \
+            -e GITHUB_CLIENT_SECRET=ci-placeholder \
+            -e GITHUB_WEBHOOK_SECRET=ci-placeholder \
+            -e API_URL=http://127.0.0.1:3001 \
+            -e WEB_URL=http://127.0.0.1:3000 \
+            vibesafe-api:ci
+
+          for i in $(seq 1 30); do
+            state=$(docker inspect -f '{{.State.Status}}' api)
+            [ "$state" = "exited" ] && break
+            curl -sf -o /dev/null http://127.0.0.1:3001/ && break
+            sleep 2
           done
-          sleep 3
+
           docker logs api
-          # A container that exited immediately means the entrypoint is wrong,
-          # which a plain `docker build` would never catch.
           state=$(docker inspect -f '{{.State.Status}}' api)
           echo "container state: $state"
           if [ "$state" = "exited" ]; then
             code=$(docker inspect -f '{{.State.ExitCode}}' api)
-            echo "::error::API container exited immediately with code $code"
+            echo "::error::API container exited with code $code"
             exit 1
           fi
+          echo "API container is running."
