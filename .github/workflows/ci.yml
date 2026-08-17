@@ -73,7 +73,7 @@ jobs:
           # @actions/core reads inputs from INPUT_<NAME>, uppercased with dashes
           # kept. Supplying them keeps the action from emitting its own
           # ::error:: annotation, which would show as a red mark on a green job.
-          INPUT_ANTHROPIC-API-KEY: dummy-key-for-load-check
+          INPUT_NVIDIA-API-KEY: dummy-key-for-load-check
           INPUT_GITHUB-TOKEN: dummy-token-for-load-check
         run: |
           # Workflow commands printed by the bundle are neutralised for the
@@ -140,7 +140,7 @@ jobs:
             -e DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/vibesafe \
             -e REDIS_URL=redis://127.0.0.1:6379 \
             -e JWT_SECRET=ci-placeholder-jwt-secret \
-            -e ANTHROPIC_API_KEY=sk-ant-ci-placeholder \
+            -e NVIDIA_API_KEY=nvapi-ci-placeholder \
             -e GITHUB_CLIENT_ID=ci-placeholder \
             -e GITHUB_CLIENT_SECRET=ci-placeholder \
             -e GITHUB_WEBHOOK_SECRET=ci-placeholder \
