@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.26.0",
     "@octokit/rest": "^21.0.0",
     "@vibesafe/shared": "*",
     "cookie-parser": "^1.4.6",
@@ -18,6 +17,7 @@
     "helmet": "^7.1.0",
     "ioredis": "^5.3.2",
     "jsonwebtoken": "^9.0.2",
+    "openai": "^7.4.0",
     "pg": "^8.11.3",
     "uuid": "^10.0.0",
     "zod": "^3.23.8"

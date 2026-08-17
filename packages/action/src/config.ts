@@ -5,7 +5,7 @@ import { AnalysisConfig, RepoConfig, DEFAULT_CONFIG } from '@vibesafe/shared';
 
 export interface ActionConfig {
   githubToken: string;
-  anthropicApiKey?: string;
+  nvidiaApiKey?: string;
   vibesafeToken?: string;
   inlineComments: boolean;
   analysis: AnalysisConfig;
@@ -13,12 +13,12 @@ export interface ActionConfig {
 
 export async function loadConfig(): Promise<ActionConfig> {
   const githubToken   = core.getInput('github-token', { required: true });
-  const anthropicKey  = core.getInput('anthropic-api-key') || undefined;
+  const nvidiaKey     = core.getInput('nvidia-api-key') || undefined;
   const vibesafeToken = core.getInput('vibesafe-token') || undefined;
   const inlineComments = core.getInput('inline-comments') === 'true';
 
-  if (!anthropicKey && !vibesafeToken) {
-    throw new Error('Either anthropic-api-key or vibesafe-token must be provided.');
+  if (!nvidiaKey && !vibesafeToken) {
+    throw new Error('Either nvidia-api-key or vibesafe-token must be provided.');
   }
 
   const baseConfig: AnalysisConfig = {
@@ -31,7 +31,7 @@ export async function loadConfig(): Promise<ActionConfig> {
   const repoConfig = await fetchRepoConfig(githubToken);
   const analysis = mergeConfigs(baseConfig, repoConfig);
 
-  return { githubToken, anthropicApiKey: anthropicKey, vibesafeToken, inlineComments, analysis };
+  return { githubToken, nvidiaApiKey: nvidiaKey, vibesafeToken, inlineComments, analysis };
 }
 
 async function fetchRepoConfig(token: string): Promise<RepoConfig | null> {

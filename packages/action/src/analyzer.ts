@@ -1,10 +1,14 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { ChangedFile, AnalysisResult, Issue, AnalysisConfig, IssueCategory } from '@vibesafe/shared';
 import { calculateScore, ISSUE_CATEGORIES, buildLineNumberMap, validateLineNumber } from '@vibesafe/shared';
 import { ActionConfig } from './config';
 import { v4 as uuid } from 'uuid';
 
 const HOSTED_API_URL = 'https://vibesafe.dev/api/analyze';
+
+// NVIDIA NIM exposes an OpenAI-compatible API, so the OpenAI SDK is the client.
+const LLM_BASE_URL = process.env.LLM_BASE_URL ?? 'https://integrate.api.nvidia.com/v1';
+const LLM_MODEL = process.env.LLM_MODEL ?? 'meta/llama-3.3-70b-instruct';
 
 export async function analyzeDiff(
   files: ChangedFile[],
@@ -16,17 +20,17 @@ export async function analyzeDiff(
   if (config.vibesafeToken) {
     return callHostedApi(files, prTitle, config.analysis, config.vibesafeToken, start);
   }
-  return callAnthropicDirect(files, prTitle, config.analysis, config.anthropicApiKey!, start);
+  return callNvidiaDirect(files, prTitle, config.analysis, config.nvidiaApiKey!, start);
 }
 
-async function callAnthropicDirect(
+async function callNvidiaDirect(
   files: ChangedFile[],
   prTitle: string,
   analysisConfig: AnalysisConfig,
   apiKey: string,
   startMs: number,
 ): Promise<AnalysisResult> {
-  const client = new Anthropic({ apiKey });
+  const client = new OpenAI({ apiKey, baseURL: LLM_BASE_URL });
 
   const diff = files
     .map(f => `// FILE: ${f.filename}\n${f.patch ?? '(no patch available)'}`)
@@ -82,30 +86,34 @@ Return ONLY valid JSON matching this exact schema:
   ]
 }`;
 
-  const response = await client.messages.create({
-    model:      'claude-opus-4-6',
-    max_tokens: 4096,
-    system:     systemPrompt,
-    messages: [{ role: 'user', content: `PR title: "${prTitle}"\n\n${diff}` }],
+  const response = await client.chat.completions.create({
+    model:       LLM_MODEL,
+    max_tokens:  4096,
+    temperature: 0.1,
+    // Enforced JSON. This model ignores a bare "return only JSON" instruction
+    // often enough to matter, and unparseable output in a security scanner is
+    // far worse than a slow one.
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `PR title: "${prTitle}"\n\n${diff}` },
+    ],
   });
 
-  const raw     = (response.content[0] as Anthropic.TextBlock).text;
+  const raw     = response.choices[0]?.message?.content ?? '';
   const cleaned = raw.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
 
   let parsed: { summary: string; score: number; issues: RawIssue[] };
   try {
     parsed = JSON.parse(cleaned);
   } catch {
-    // If the model returns something unparseable, treat it as a clean scan
-    return {
-      summary:        prTitle,
-      score:          100,
-      issues:         [],
-      files_analyzed: files.length,
-      model_used:     'claude-opus-4-6',
-      tokens_used:    response.usage.input_tokens + response.usage.output_tokens,
-      analysis_ms:    Date.now() - startMs,
-    };
+    // Previously this returned score 100 with no issues - a "clean scan". For a
+    // security tool that is a silent false negative: a malformed response would
+    // report every PR as safe. Fail loudly instead; the action surfaces this as
+    // an error and the reviewer knows the scan did not run.
+    throw new Error(
+      `Model returned unparseable JSON (${LLM_MODEL}). First 200 chars: ${raw.slice(0, 200)}`,
+    );
   }
 
   const lineMap = buildLineNumberMap(files);
@@ -127,8 +135,8 @@ Return ONLY valid JSON matching this exact schema:
     score:          calculateScore(issues),
     issues,
     files_analyzed: files.length,
-    model_used:     'claude-opus-4-6',
-    tokens_used:    response.usage.input_tokens + response.usage.output_tokens,
+    model_used:     LLM_MODEL,
+    tokens_used:    (response.usage?.prompt_tokens ?? 0) + (response.usage?.completion_tokens ?? 0),
     analysis_ms:    Date.now() - startMs,
   };
 }

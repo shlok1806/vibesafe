@@ -7,11 +7,11 @@ branding:
   color: purple
 
 inputs:
-  anthropic-api-key:
-    description: Your Anthropic API key. If omitted, uses the hosted VibeSafe API (requires vibesafe-token).
+  nvidia-api-key:
+    description: Your NVIDIA API key (nvapi-...) for NVIDIA NIM. If omitted, uses the hosted VibeSafe API (requires vibesafe-token).
     required: false
   vibesafe-token:
-    description: VibeSafe hosted API token. Alternative to bringing your own Anthropic key.
+    description: VibeSafe hosted API token. Alternative to bringing your own NVIDIA key.
     required: false
   github-token:
     description: GitHub token for posting comments. Defaults to the built-in token.

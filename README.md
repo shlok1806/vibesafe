@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: shlok1806/vibesafe@v1
         with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
 ```
 
 ## What it catches
@@ -59,7 +59,7 @@ custom_rules:
 
 | Input | Default | Description |
 |---|---|---|
-| `anthropic-api-key` | — | Your Anthropic API key (BYO mode) |
+| `nvidia-api-key` | — | Your NVIDIA API key, `nvapi-...` (BYO mode) |
 | `vibesafe-token` | — | Hosted API token (alternative to BYO) |
 | `severity-threshold` | `warning` | Minimum severity to report |
 | `fail-on-critical` | `false` | Exit 1 if any critical issues found |
