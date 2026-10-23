@@ -14,7 +14,7 @@
 # `npm run build` by hand. This compiles inside the image instead.
 
 # ---- build -------------------------------------------------------------------
-FROM node:20-slim AS build
+FROM node:24-slim AS build
 WORKDIR /app
 
 COPY package.json package-lock.json turbo.json ./
@@ -25,7 +25,7 @@ RUN npm run build --workspace @vibesafe/shared \
  && npm run build --workspace @vibesafe/api
 
 # ---- runtime -----------------------------------------------------------------
-FROM node:20-slim AS runtime
+FROM node:24-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
